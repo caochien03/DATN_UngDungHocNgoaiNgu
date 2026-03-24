@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useParams, Link } from "react-router";
 import { Navigation } from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Progress } from "../components/ui/progress";
 import { Badge } from "../components/ui/badge";
 import { ChevronLeft, ChevronRight, RotateCcw, Volume2, Check, X } from "lucide-react";
+import { getDeck } from "../lib/decks";
 
 const flashcardSets = [
   {
@@ -27,7 +29,25 @@ const flashcardSets = [
 ];
 
 export default function Flashcards() {
-  const [currentSet] = useState(flashcardSets[0]);
+  const params = useParams();
+  const deckId = params.deckId as string | undefined;
+
+  const deck = useMemo(() => (deckId ? getDeck(deckId) : null), [deckId]);
+
+  const currentSet = useMemo(() => {
+    if (!deck) return flashcardSets[0];
+    return {
+      id: deck.id,
+      title: deck.title,
+      level: `${deck.sourceLanguageCode.toUpperCase()} → ${deck.targetLanguageCode.toUpperCase()}`,
+      cards: deck.cards.map((c) => ({
+        front: c.front,
+        back: c.back,
+      })),
+      ttsLang: deck.targetLanguageCode,
+    };
+  }, [deck]);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [knownCards, setKnownCards] = useState<number[]>([]);
@@ -73,8 +93,14 @@ export default function Flashcards() {
 
   const speakKorean = () => {
     if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(currentCard.korean);
-      utterance.lang = 'ko-KR';
+      const utterance = new SpeechSynthesisUtterance(
+        "back" in currentCard ? (currentCard as any).back : (currentCard as any).korean
+      );
+      const lang =
+        "ttsLang" in currentSet && typeof (currentSet as any).ttsLang === "string"
+          ? (currentSet as any).ttsLang
+          : "ko";
+      utterance.lang = lang.includes("-") ? lang : `${lang}-${lang.toUpperCase()}`;
       utterance.rate = 0.8;
       window.speechSynthesis.speak(utterance);
     }
@@ -90,6 +116,15 @@ export default function Flashcards() {
           <h1 className="text-4xl font-bold mb-4">Flashcards</h1>
           <p className="text-xl text-gray-600 mb-4">{currentSet.title}</p>
           <Badge variant="secondary">{currentSet.level}</Badge>
+          {deckId && !deck && (
+            <div className="mt-4 text-sm text-orange-700">
+              Không tìm thấy bộ từ. Bạn có thể{" "}
+              <Link className="underline" to="/decks">
+                chọn lại bộ từ
+              </Link>
+              .
+            </div>
+          )}
         </div>
 
         {/* Progress */}
@@ -135,8 +170,12 @@ export default function Flashcards() {
             <Card className={`absolute inset-0 backface-hidden ${isFlipped ? 'invisible' : ''}`}>
               <CardContent className="h-full flex flex-col items-center justify-center p-8">
                 <div className="text-center">
-                  <p className="text-6xl font-bold mb-4">{currentCard.korean}</p>
-                  <p className="text-xl text-gray-500 mb-8">{currentCard.pronunciation}</p>
+                  <p className="text-6xl font-bold mb-4">
+                    {"front" in currentCard ? (currentCard as any).front : (currentCard as any).korean}
+                  </p>
+                  {"pronunciation" in (currentCard as any) && (
+                    <p className="text-xl text-gray-500 mb-8">{(currentCard as any).pronunciation}</p>
+                  )}
                   <Button onClick={(e) => { e.stopPropagation(); speakKorean(); }} variant="outline" className="gap-2">
                     <Volume2 className="w-5 h-5" />
                     Nghe phát âm
@@ -150,10 +189,16 @@ export default function Flashcards() {
             <Card className={`absolute inset-0 backface-hidden rotate-y-180 ${!isFlipped ? 'invisible' : ''}`}>
               <CardContent className="h-full flex flex-col items-center justify-center p-8 bg-gradient-to-br from-blue-50 to-purple-50">
                 <div className="text-center">
-                  <p className="text-5xl font-bold text-blue-600 mb-4">{currentCard.vietnamese}</p>
+                  <p className="text-5xl font-bold text-blue-600 mb-4">
+                    {"back" in currentCard ? (currentCard as any).back : (currentCard as any).vietnamese}
+                  </p>
                   <div className="mt-8 p-4 bg-white rounded-lg">
-                    <p className="text-2xl text-gray-700">{currentCard.korean}</p>
-                    <p className="text-gray-500">{currentCard.pronunciation}</p>
+                    <p className="text-2xl text-gray-700">
+                      {"front" in currentCard ? (currentCard as any).front : (currentCard as any).korean}
+                    </p>
+                    {"pronunciation" in (currentCard as any) && (
+                      <p className="text-gray-500">{(currentCard as any).pronunciation}</p>
+                    )}
                   </div>
                 </div>
                 <p className="text-sm text-gray-400 mt-8">Nhấp để quay lại</p>
@@ -226,6 +271,41 @@ export default function Flashcards() {
                 Bạn đã xem hết {currentSet.cards.length} thẻ. 
                 {knownCards.length > 0 && ` Bạn đã biết ${knownCards.length} từ!`}
               </p>
+              <div className="mt-6 flex flex-col sm:flex-row flex-wrap gap-3 justify-center">
+                {deckId && deck && (
+                  <>
+                    <Link to={`/decks/${deckId}`}>
+                      <Button variant="outline">Về bộ từ</Button>
+                    </Link>
+                    <Link to="/practice">
+                      <Button variant="outline">Chọn bộ khác</Button>
+                    </Link>
+                    <Link to={`/quiz/${deckId}`}>
+                      <Button variant="outline">Làm trắc nghiệm</Button>
+                    </Link>
+                    <Link to={`/matching/${deckId}`}>
+                      <Button variant="outline">Chơi ghép nối</Button>
+                    </Link>
+                    <Link to={`/writing/${deckId}`}>
+                      <Button variant="outline">Luyện viết</Button>
+                    </Link>
+                  </>
+                )}
+                {!deckId && (
+                  <>
+                    <Link to="/practice">
+                      <Button variant="outline">Chọn bộ từ</Button>
+                    </Link>
+                    <Link to="/decks">
+                      <Button variant="outline">Tạo bộ từ</Button>
+                    </Link>
+                  </>
+                )}
+                <Button onClick={handleReset} className="gap-2">
+                  <RotateCcw className="w-4 h-4" />
+                  Học lại Flashcards
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}

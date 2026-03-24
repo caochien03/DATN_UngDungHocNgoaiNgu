@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Link, useParams } from "react-router";
 import { Navigation } from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -7,6 +8,7 @@ import { Badge } from "../components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Label } from "../components/ui/label";
 import { CheckCircle2, XCircle, Trophy } from "lucide-react";
+import { getDeck } from "../lib/decks";
 
 const quizData = [
   {
@@ -59,7 +61,45 @@ const quizData = [
   },
 ];
 
+type QuizQuestion = {
+  question: string;
+  options: string[];
+  correct: number;
+  explanation: string;
+};
+
+function shuffle<T>(arr: T[]) {
+  return [...arr].sort(() => Math.random() - 0.5);
+}
+
+function buildQuizFromDeck(deck: NonNullable<ReturnType<typeof getDeck>>): QuizQuestion[] {
+  const cards = deck.cards.filter((c) => c.front.trim() && c.back.trim());
+  if (cards.length < 2) return [];
+
+  const pool = shuffle(cards).slice(0, Math.min(12, cards.length));
+  return pool.map((c) => {
+    const distractors = shuffle(cards.filter((x) => x.id !== c.id))
+      .slice(0, 3)
+      .map((x) => x.front);
+    const options = shuffle([c.front, ...distractors]);
+    const correct = options.findIndex((o) => o === c.front);
+    return {
+      question: `"${c.back}" có nghĩa là gì?`,
+      options,
+      correct: Math.max(0, correct),
+      explanation: `Đáp án đúng: ${c.front}.`,
+    };
+  });
+}
+
 export default function Quiz() {
+  const params = useParams();
+  const deckId = params.deckId as string | undefined;
+
+  const deck = useMemo(() => (deckId ? getDeck(deckId) : null), [deckId]);
+  const deckQuiz = useMemo(() => (deck ? buildQuizFromDeck(deck) : []), [deck]);
+  const data = deckQuiz.length > 0 ? deckQuiz : quizData;
+
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
@@ -67,8 +107,8 @@ export default function Quiz() {
   const [answers, setAnswers] = useState<boolean[]>([]);
   const [quizCompleted, setQuizCompleted] = useState(false);
 
-  const question = quizData[currentQuestion];
-  const progress = ((currentQuestion + 1) / quizData.length) * 100;
+  const question = data[currentQuestion];
+  const progress = ((currentQuestion + 1) / data.length) * 100;
 
   const handleAnswer = () => {
     if (selectedAnswer === null) return;
@@ -84,7 +124,7 @@ export default function Quiz() {
   };
 
   const handleNext = () => {
-    if (currentQuestion < quizData.length - 1) {
+    if (currentQuestion < data.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
       setSelectedAnswer(null);
       setShowResult(false);
@@ -103,7 +143,7 @@ export default function Quiz() {
   };
 
   if (quizCompleted) {
-    const percentage = (score / quizData.length) * 100;
+    const percentage = (score / data.length) * 100;
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50">
@@ -117,7 +157,7 @@ export default function Quiz() {
               
               <div className="my-8">
                 <div className="text-6xl font-bold text-blue-600 mb-2">
-                  {score}/{quizData.length}
+                  {score}/{data.length}
                 </div>
                 <p className="text-2xl text-gray-600">
                   Điểm của bạn: {percentage.toFixed(0)}%
@@ -141,7 +181,7 @@ export default function Quiz() {
 
               {/* Review Answers */}
               <div className="grid gap-3 mb-8 text-left">
-                {quizData.map((q, index) => (
+                {data.map((q, index) => (
                   <div key={index} className="flex items-center gap-3 p-3 bg-white rounded-lg">
                     {answers[index] ? (
                       <CheckCircle2 className="w-6 h-6 text-green-500 flex-shrink-0" />
@@ -156,9 +196,54 @@ export default function Quiz() {
                 ))}
               </div>
 
-              <Button onClick={handleRestart} size="lg">
-                Làm lại bài kiểm tra
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                {deckId && deck && (
+                  <>
+                    <Link to={`/decks/${deckId}`}>
+                      <Button variant="outline" size="lg">
+                        Về bộ từ
+                      </Button>
+                    </Link>
+                    <Link to="/practice">
+                      <Button variant="outline" size="lg">
+                        Chọn bộ khác
+                      </Button>
+                    </Link>
+                    <Link to={`/flashcards/${deckId}`}>
+                      <Button variant="outline" size="lg">
+                        Làm Flashcards
+                      </Button>
+                    </Link>
+                    <Link to={`/matching/${deckId}`}>
+                      <Button variant="outline" size="lg">
+                        Chơi ghép nối
+                      </Button>
+                    </Link>
+                    <Link to={`/writing/${deckId}`}>
+                      <Button variant="outline" size="lg">
+                        Luyện viết
+                      </Button>
+                    </Link>
+                  </>
+                )}
+                {!deckId && (
+                  <>
+                    <Link to="/practice">
+                      <Button variant="outline" size="lg">
+                        Chọn bộ từ
+                      </Button>
+                    </Link>
+                    <Link to="/decks">
+                      <Button variant="outline" size="lg">
+                        Tạo bộ từ
+                      </Button>
+                    </Link>
+                  </>
+                )}
+                <Button onClick={handleRestart} size="lg">
+                  Làm lại trắc nghiệm
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -174,13 +259,29 @@ export default function Quiz() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4">Bài tập trắc nghiệm</h1>
-          <p className="text-xl text-gray-600">Kiểm tra kiến thức từ vựng tiếng Hàn</p>
+            <p className="text-xl text-gray-600">
+              {deck ? `Bộ: ${deck.title}` : "Kiểm tra kiến thức (demo)"}
+            </p>
+            {deckId && !deck && (
+              <div className="mt-3 text-sm text-orange-700">
+                Không tìm thấy bộ từ. Bạn có thể{" "}
+                <Link className="underline" to="/decks">
+                  chọn lại bộ từ
+                </Link>
+                .
+              </div>
+            )}
+            {deck && deckQuiz.length === 0 && (
+              <div className="mt-3 text-sm text-orange-700">
+                Bộ từ cần tối thiểu 2 thẻ để tạo trắc nghiệm. Đang hiển thị demo.
+              </div>
+            )}
         </div>
 
         {/* Progress */}
         <div className="mb-8">
           <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span>Câu hỏi {currentQuestion + 1} / {quizData.length}</span>
+              <span>Câu hỏi {currentQuestion + 1} / {data.length}</span>
             <span>Điểm: {score}/{currentQuestion + (showResult ? 1 : 0)}</span>
           </div>
           <Progress value={progress} className="h-2" />
@@ -275,7 +376,7 @@ export default function Quiz() {
             </Button>
           ) : (
             <Button onClick={handleNext} size="lg" className="px-12">
-              {currentQuestion < quizData.length - 1 ? 'Câu tiếp theo' : 'Xem kết quả'}
+              {currentQuestion < data.length - 1 ? 'Câu tiếp theo' : 'Xem kết quả'}
             </Button>
           )}
         </div>

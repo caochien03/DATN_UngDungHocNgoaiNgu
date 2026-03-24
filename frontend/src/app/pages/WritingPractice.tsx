@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Link, useParams } from "react-router";
 import { Navigation } from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -6,6 +7,7 @@ import { Input } from "../components/ui/input";
 import { Badge } from "../components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { CheckCircle2, XCircle, Volume2, RotateCcw, Sparkles } from "lucide-react";
+import { getDeck } from "../lib/decks";
 
 const writingExercises = [
   { id: 1, vietnamese: "Xin chào", korean: "안녕하세요", level: "Cơ bản" },
@@ -21,6 +23,10 @@ const writingExercises = [
 ];
 
 export default function WritingPractice() {
+  const params = useParams();
+  const deckId = params.deckId as string | undefined;
+  const deck = deckId ? getDeck(deckId) : null;
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [keyboardInput, setKeyboardInput] = useState("");
   const [handwritingInput, setHandwritingInput] = useState("");
@@ -31,7 +37,9 @@ export default function WritingPractice() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
-  const currentExercise = writingExercises[currentIndex];
+  const currentExercise = deck && deck.cards.length > 0
+    ? { id: currentIndex, vietnamese: deck.cards[currentIndex]?.front ?? "", korean: deck.cards[currentIndex]?.back ?? "", level: `${deck.sourceLanguageCode.toUpperCase()} → ${deck.targetLanguageCode.toUpperCase()}` }
+    : writingExercises[currentIndex];
 
   // Canvas drawing
   useEffect(() => {
@@ -109,7 +117,8 @@ export default function WritingPractice() {
   };
 
   const handleNext = () => {
-    if (currentIndex < writingExercises.length - 1) {
+    const total = deck && deck.cards.length > 0 ? deck.cards.length : writingExercises.length;
+    if (currentIndex < total - 1) {
       setCurrentIndex(currentIndex + 1);
       setKeyboardInput("");
       setHandwritingInput("");
@@ -133,7 +142,8 @@ export default function WritingPractice() {
   const speakKorean = () => {
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(currentExercise.korean);
-      utterance.lang = 'ko-KR';
+      const lang = deck?.targetLanguageCode ?? "ko";
+      utterance.lang = lang.includes("-") ? lang : `${lang}-${lang.toUpperCase()}`;
       utterance.rate = 0.8;
       window.speechSynthesis.speak(utterance);
     }
@@ -155,14 +165,27 @@ export default function WritingPractice() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4">Luyện viết tiếng Hàn</h1>
-          <p className="text-xl text-gray-600">Nhìn tiếng Việt, viết tiếng Hàn</p>
+          <p className="text-xl text-gray-600">
+            {deck ? `Bộ: ${deck.title}` : "Nhìn tiếng Việt, viết tiếng Hàn (demo)"}
+          </p>
+          {deckId && !deck && (
+            <div className="mt-3 text-sm text-orange-700">
+              Không tìm thấy bộ từ. Bạn có thể{" "}
+              <Link className="underline" to="/decks">
+                chọn lại bộ từ
+              </Link>
+              .
+            </div>
+          )}
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8 max-w-2xl mx-auto">
           <Card>
             <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-blue-600">{currentIndex + 1}/{writingExercises.length}</p>
+              <p className="text-2xl font-bold text-blue-600">
+                {currentIndex + 1}/{deck && deck.cards.length > 0 ? deck.cards.length : writingExercises.length}
+              </p>
               <p className="text-sm text-gray-600">Câu hiện tại</p>
             </CardContent>
           </Card>
@@ -311,8 +334,15 @@ export default function WritingPractice() {
                   }} variant="outline" className="flex-1">
                     Làm lại
                   </Button>
-                  <Button onClick={handleNext} className="flex-1" disabled={currentIndex === writingExercises.length - 1}>
-                    C��u tiếp theo
+                  <Button
+                    onClick={handleNext}
+                    className="flex-1"
+                    disabled={
+                      currentIndex ===
+                      (deck && deck.cards.length > 0 ? deck.cards.length : writingExercises.length) - 1
+                    }
+                  >
+                    Câu tiếp theo
                   </Button>
                 </>
               )}
@@ -321,11 +351,42 @@ export default function WritingPractice() {
         </Card>
 
         {/* Complete */}
-        {currentIndex === writingExercises.length - 1 && isChecked && (
+        {currentIndex === (deck && deck.cards.length > 0 ? deck.cards.length : writingExercises.length) - 1 && isChecked && (
           <Card className="bg-gradient-to-r from-green-50 to-blue-50 border-green-200">
             <CardContent className="p-8 text-center">
               <h3 className="text-3xl font-bold mb-4">🎉 Hoàn thành!</h3>
               <p className="text-xl mb-4">Bạn đã làm đúng {score}/{attempts} lượt</p>
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center mb-6">
+                {deckId && deck && (
+                  <>
+                    <Link to={`/decks/${deckId}`}>
+                      <Button variant="outline">Về bộ từ</Button>
+                    </Link>
+                    <Link to="/practice">
+                      <Button variant="outline">Chọn bộ khác</Button>
+                    </Link>
+                    <Link to={`/flashcards/${deckId}`}>
+                      <Button variant="outline">Flashcards</Button>
+                    </Link>
+                    <Link to={`/quiz/${deckId}`}>
+                      <Button variant="outline">Trắc nghiệm</Button>
+                    </Link>
+                    <Link to={`/matching/${deckId}`}>
+                      <Button variant="outline">Ghép nối</Button>
+                    </Link>
+                  </>
+                )}
+                {!deckId && (
+                  <>
+                    <Link to="/practice">
+                      <Button variant="outline">Chọn bộ từ</Button>
+                    </Link>
+                    <Link to="/decks">
+                      <Button variant="outline">Tạo bộ từ</Button>
+                    </Link>
+                  </>
+                )}
+              </div>
               <Button onClick={handleReset} size="lg" className="gap-2">
                 <RotateCcw className="w-5 h-5" />
                 Bắt đầu lại

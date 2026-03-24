@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { Link, useParams } from "react-router";
 import { Navigation } from "../components/Navigation";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { RotateCcw, Trophy, Timer } from "lucide-react";
+import { getDeck } from "../lib/decks";
 
 interface CardItem {
   id: number;
@@ -26,6 +28,10 @@ const wordPairs = [
 ];
 
 export default function MatchingGame() {
+  const params = useParams();
+  const deckId = params.deckId as string | undefined;
+  const deck = deckId ? getDeck(deckId) : null;
+
   const [cards, setCards] = useState<CardItem[]>([]);
   const [selectedCards, setSelectedCards] = useState<CardItem[]>([]);
   const [moves, setMoves] = useState(0);
@@ -33,11 +39,12 @@ export default function MatchingGame() {
   const [time, setTime] = useState(0);
   const [isGameActive, setIsGameActive] = useState(false);
   const [gameCompleted, setGameCompleted] = useState(false);
+  const [pairCount, setPairCount] = useState(wordPairs.length);
 
   // Initialize game
   useEffect(() => {
     initializeGame();
-  }, []);
+  }, [deckId]);
 
   // Timer
   useEffect(() => {
@@ -52,7 +59,12 @@ export default function MatchingGame() {
 
   const initializeGame = () => {
     const newCards: CardItem[] = [];
-    wordPairs.forEach((pair, index) => {
+    const pairs =
+      deck && deck.cards.length > 0
+        ? deck.cards.map((c) => ({ korean: c.back, vietnamese: c.front }))
+        : wordPairs;
+
+    pairs.forEach((pair, index) => {
       newCards.push({
         id: index * 2,
         content: pair.korean,
@@ -73,6 +85,7 @@ export default function MatchingGame() {
     
     // Shuffle cards
     const shuffled = newCards.sort(() => Math.random() - 0.5);
+    setPairCount(pairs.length);
     setCards(shuffled);
     setSelectedCards([]);
     setMoves(0);
@@ -117,14 +130,19 @@ export default function MatchingGame() {
                 : c
             )
           );
-          setMatchedPairs(matchedPairs + 1);
           setSelectedCards([]);
 
-          // Check if game is completed
-          if (matchedPairs + 1 === wordPairs.length) {
-            setGameCompleted(true);
-            setIsGameActive(false);
-          }
+          setMatchedPairs((mp) => {
+            const next = mp + 1;
+            setPairCount((pc) => {
+              if (next === pc) {
+                setGameCompleted(true);
+                setIsGameActive(false);
+              }
+              return pc;
+            });
+            return next;
+          });
         }, 500);
       } else {
         // No match
@@ -156,7 +174,18 @@ export default function MatchingGame() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-4">Trò chơi ghép nối</h1>
-          <p className="text-xl text-gray-600">Ghép từ tiếng Hàn với nghĩa tiếng Việt</p>
+          <p className="text-xl text-gray-600">
+            {deck ? `Bộ: ${deck.title}` : "Ghép từ (demo)"}
+          </p>
+          {deckId && !deck && (
+            <div className="mt-3 text-sm text-orange-700">
+              Không tìm thấy bộ từ. Bạn có thể{" "}
+              <Link className="underline" to="/decks">
+                chọn lại bộ từ
+              </Link>
+              .
+            </div>
+          )}
         </div>
 
         {/* Stats */}
@@ -171,7 +200,7 @@ export default function MatchingGame() {
           <Card>
             <CardContent className="p-4 text-center">
               <Trophy className="w-6 h-6 mx-auto mb-2 text-green-600" />
-              <p className="text-2xl font-bold">{matchedPairs}/{wordPairs.length}</p>
+              <p className="text-2xl font-bold">{matchedPairs}/{pairCount}</p>
               <p className="text-sm text-gray-600">Cặp đúng</p>
             </CardContent>
           </Card>
@@ -193,6 +222,37 @@ export default function MatchingGame() {
               <p className="text-xl text-gray-700 mb-4">
                 Bạn đã hoàn thành trò chơi trong {moves} lượt và {formatTime(time)}!
               </p>
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center mb-4">
+                {deckId && deck && (
+                  <>
+                    <Link to={`/decks/${deckId}`}>
+                      <Button variant="outline">Về bộ từ</Button>
+                    </Link>
+                    <Link to="/practice">
+                      <Button variant="outline">Chọn bộ khác</Button>
+                    </Link>
+                    <Link to={`/flashcards/${deckId}`}>
+                      <Button variant="outline">Flashcards</Button>
+                    </Link>
+                    <Link to={`/quiz/${deckId}`}>
+                      <Button variant="outline">Trắc nghiệm</Button>
+                    </Link>
+                    <Link to={`/writing/${deckId}`}>
+                      <Button variant="outline">Luyện viết</Button>
+                    </Link>
+                  </>
+                )}
+                {!deckId && (
+                  <>
+                    <Link to="/practice">
+                      <Button variant="outline">Chọn bộ từ</Button>
+                    </Link>
+                    <Link to="/decks">
+                      <Button variant="outline">Tạo bộ từ</Button>
+                    </Link>
+                  </>
+                )}
+              </div>
               <Button onClick={initializeGame} size="lg" className="gap-2">
                 <RotateCcw className="w-5 h-5" />
                 Chơi lại

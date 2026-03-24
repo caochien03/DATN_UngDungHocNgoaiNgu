@@ -10,6 +10,10 @@ import Grammar from "./pages/Grammar";
 import GroupLearning from "./pages/GroupLearning";
 import SpeakingPractice from "./pages/SpeakingPractice";
 import VideoLessons from "./pages/VideoLessons";
+import Decks from "./pages/Decks";
+import DeckCreate from "./pages/DeckCreate";
+import DeckDetail from "./pages/DeckDetail";
+import Practice from "./pages/Practice";
 import NotFound from "./pages/NotFound";
 
 export const router = createBrowserRouter([
@@ -22,7 +26,15 @@ export const router = createBrowserRouter([
     Component: Flashcards,
   },
   {
+    path: "/flashcards/:deckId",
+    Component: Flashcards,
+  },
+  {
     path: "/quiz",
+    Component: Quiz,
+  },
+  {
+    path: "/quiz/:deckId",
     Component: Quiz,
   },
   {
@@ -30,7 +42,15 @@ export const router = createBrowserRouter([
     Component: MatchingGame,
   },
   {
+    path: "/matching/:deckId",
+    Component: MatchingGame,
+  },
+  {
     path: "/writing",
+    Component: WritingPractice,
+  },
+  {
+    path: "/writing/:deckId",
     Component: WritingPractice,
   },
   {
@@ -56,6 +76,22 @@ export const router = createBrowserRouter([
   {
     path: "/videos",
     Component: VideoLessons,
+  },
+  {
+    path: "/decks",
+    Component: Decks,
+  },
+  {
+    path: "/decks/new",
+    Component: DeckCreate,
+  },
+  {
+    path: "/decks/:deckId",
+    Component: DeckDetail,
+  },
+  {
+    path: "/practice",
+    Component: Practice,
   },
   {
     path: "*",
